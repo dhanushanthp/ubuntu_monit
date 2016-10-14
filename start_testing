@@ -1,0 +1,64 @@
+#!/bin/bash
+PROG="test" # Unique name for PID
+SLACK_CH="test_slack"
+SLACK_TOK=""
+USER="S3_Checker"
+PID_PATH="/home/ubuntu" # path to the execution location
+EXECUTE="nohup python -u $PID_PATH/test.py > $PID_PATH/logs.log &" # Actual code that need to be executed
+
+start() {
+    if [ -e "$PID_PATH/$PROG.pid" ]; then
+    PID=$(head -n 1 "$PID_PATH/$PROG.pid")
+        if ! ps -p $PID > /dev/null;
+        then
+            rm "$PID_PATH/$PROG.pid"
+            eval $EXECUTE
+            echo "$PROG started"
+            touch "$PID_PATH/$PROG.pid"
+            echo $! > "$PID_PATH/$PROG.pid"
+        fi
+        exit 1
+    else
+        eval $EXECUTE
+        echo "$PROG started"
+        touch "$PID_PATH/$PROG.pid"
+        echo $! > "$PID_PATH/$PROG.pid"
+    fi
+}
+
+stop() {
+    if [ -e "$PID_PATH/$PROG.pid" ]; then
+        PID=$(head -n 1 "$PID_PATH/$PROG.pid")
+        kill -9 $PID
+        rm "$PID_PATH/$PROG.pid"
+        echo "$PROG service is stopped"
+    else
+        echo "WARNING! $PROG service is not running!" 1>&2
+        exit 1
+    fi
+}
+
+slack() {
+	python $PID_PATH/slack.py "$USER" "$SLACK_CH" "$PROG service has been restarted..." "$SLACK_TOK"
+}
+
+case "$1" in
+    start)
+        start
+        exit 0
+    ;;
+    stop)
+	slack
+        stop
+        exit 0
+    ;;
+    reload|restart|force-reload)
+        stop
+        start
+        exit 0
+    ;;
+    **)
+        echo "Usage: $0 {start|stop|restart}" 1>&2
+        exit 1
+    ;;
+esac
